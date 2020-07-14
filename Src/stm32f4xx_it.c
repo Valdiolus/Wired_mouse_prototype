@@ -65,7 +65,7 @@ extern UART_HandleTypeDef huart5;
 extern TIM_HandleTypeDef htim6;
 
 /* USER CODE BEGIN EV */
-uint8_t uart5_buffer[10];
+
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -170,12 +170,12 @@ void DebugMon_Handler(void)
 void UART5_IRQHandler(void)
 {
   /* USER CODE BEGIN UART5_IRQn 0 */
-  static uint8_t i_uart=0;
+  
   UART5->SR &= ~USART_CR1_RXNEIE;
   /* USER CODE END UART5_IRQn 0 */
   //HAL_UART_IRQHandler(&huart5);
   /* USER CODE BEGIN UART5_IRQn 1 */
-  uart5_buffer[i_uart++] = UART5->DR & (uint8_t)0x00FF;
+  UART_callback();
   /* USER CODE END UART5_IRQn 1 */
 }
 

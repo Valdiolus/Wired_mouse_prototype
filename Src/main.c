@@ -62,7 +62,11 @@ SDRAM_HandleTypeDef hsdram1;
 
 osThreadId defaultTaskHandle;
 /* USER CODE BEGIN PV */
-
+uint8_t uart5_buffer[11];
+uint8_t JY931_data_ready=0;
+uint8_t jy931_errors[5];
+volatile float jy_acc[3], jy_ang_vel[3], jy_angle[3], jy_temp;
+uint8_t temp[11];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -78,6 +82,7 @@ static void MX_TIM1_Init(void);
 static void MX_UART5_Init(void);
 static void MX_USART1_UART_Init(void);
 void StartDefaultTask(void const * argument);
+void StartJY931Task(void const * argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -151,7 +156,8 @@ int main(void)
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
-  /* add threads, ... */
+  osThreadDef(JY931Task, StartJY931Task, osPriorityRealtime, 0, 1024);
+  defaultTaskHandle = osThreadCreate(osThread(JY931Task), NULL);
   /* USER CODE END RTOS_THREADS */
 
   /* Start scheduler */
@@ -503,6 +509,7 @@ static void MX_UART5_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN UART5_Init 2 */
+  HAL_NVIC_SetPriority(UART5_IRQn, 0,0);
   UART5->CR1 |= UART_IT_RXNE;
   //HAL_UART_Receive_IT(&huart5, (uint8_t *) abc, 1000);
   /* USER CODE END UART5_Init 2 */
@@ -675,7 +682,75 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+//931 output: acceleration, velocity, euler angle - 11 bytes each package
+void UART_callback(void)
+{
+  static uint8_t i_uart=0;
+  
+  uart5_buffer[i_uart] = (uint16_t) (UART5->DR & (uint16_t)0x01FF);
+  
+  if (uart5_buffer[0]==0x55) 
+  {
+    i_uart++;
+    if (i_uart > 10) 
+    {
+      JY931_data_ready=1;
+      i_uart=0;
+    }
+  }
+}
 
+
+void StartJY931Task(void const * argument)
+{
+  while(1)
+  {
+    //osDelay(1);
+    
+    if (JY931_data_ready)
+    {
+      JY931_data_ready=0;
+      
+      memcpy(temp,uart5_buffer,11);
+      
+      if(temp[0]==0x55)
+      {
+        switch(temp[1])
+        {
+          case 0x51://acceleration
+          {
+            jy_acc[0] = ((short)(temp [3]<<8| temp [2]))/32768.0*16;
+            jy_acc[1] = ((short)(temp [5]<<8| temp [4]))/32768.0*16;
+            jy_acc[2] = ((short)(temp [7]<<8| temp [6]))/32768.0*16;
+            jy_temp   = ((short)(temp [9]<<8| temp [8]))/100;            
+          }break;
+          case 0x52://angular velocity
+          {
+            jy_ang_vel[0] = ((short)(temp [3]<<8| temp [2]))/32768.0*2000;
+            jy_ang_vel[1] = ((short)(temp [5]<<8| temp [4]))/32768.0*2000;
+            jy_ang_vel[2] = ((short)(temp [7]<<8| temp [6]))/32768.0*2000;
+            jy_temp       = ((short)(temp [9]<<8| temp [8]))/100;            
+          }break;
+          case 0x53://euler angle
+          {
+            jy_angle[0] = ((short)(temp [3]<<8| temp [2]))/32768.0*180;
+            jy_angle[1] = ((short)(temp [5]<<8| temp [4]))/32768.0*180;
+            jy_angle[2] = ((short)(temp [7]<<8| temp [6]))/32768.0*180;
+            jy_temp     = ((short)(temp [9]<<8| temp [8]))/100;            
+          }break;
+          default:
+          {
+            jy931_errors[1]++;
+          }break;
+        }
+      }
+      else
+      {
+        jy931_errors[0]++;
+      }
+    }
+  }
+}
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -690,12 +765,14 @@ void StartDefaultTask(void const * argument)
   /* init code for USB_DEVICE */
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 5 */
+  //uint8_t hello_uart_buff[14] = {"STM32 Loaded\n\r"};
+  //HAL_UART_Transmit(&huart5, hello_uart_buff, 14, 1000);
   /* Infinite loop */
   for(;;)
   {
-    HAL_GPIO_WritePin(GPIOG, LD3_Pin, 1);
+    HAL_GPIO_WritePin(GPIOG, LD3_Pin, GPIO_PIN_SET);
     osDelay(500);
-    HAL_GPIO_WritePin(GPIOG, LD3_Pin, 0);
+    HAL_GPIO_WritePin(GPIOG, LD3_Pin, GPIO_PIN_RESET);
     osDelay(500);
   }
   /* USER CODE END 5 */ 
