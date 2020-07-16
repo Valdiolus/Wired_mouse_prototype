@@ -61,11 +61,12 @@ UART_HandleTypeDef huart1;
 SDRAM_HandleTypeDef hsdram1;
 
 osThreadId defaultTaskHandle;
+osThreadId JY931TaskHandle;
 /* USER CODE BEGIN PV */
 uint8_t uart5_buffer[11];
 uint8_t JY931_data_ready=0;
 uint8_t jy931_errors[5];
-volatile float jy_acc[3], jy_ang_vel[3], jy_angle[3], jy_temp;
+volatile float jy_acc[3], jy_ang_vel[3], jy_angle[3], jy_temp, angle_old[3];
 uint8_t temp[11];
 /* USER CODE END PV */
 
@@ -85,7 +86,7 @@ void StartDefaultTask(void const * argument);
 void StartJY931Task(void const * argument);
 
 /* USER CODE BEGIN PFP */
-
+osSemaphoreId uart_data_readyHandle;
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -140,6 +141,8 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
   /* add semaphores, ... */
+  osSemaphoreDef(uart_data_ready);
+  uart_data_readyHandle = xSemaphoreCreateBinary(osSemaphore(uart_data_ready), 1, queueQUEUE_TYPE_BINARY_SEMAPHORE);
   /* USER CODE END RTOS_SEMAPHORES */
 
   /* USER CODE BEGIN RTOS_TIMERS */
@@ -694,7 +697,8 @@ void UART_callback(void)
     i_uart++;
     if (i_uart > 10) 
     {
-      JY931_data_ready=1;
+      //JY931_data_ready=1;
+      xSemaphoreGiveFromISR(uart_data_ready);
       i_uart=0;
     }
   }
@@ -703,10 +707,12 @@ void UART_callback(void)
 
 void StartJY931Task(void const * argument)
 {
+  uint8_t usb_buff[4] = {0,0,0,0};
   while(1)
   {
     //osDelay(1);
     
+    val = osSemaphoreWait(wit_angle_readyHandle, 1000);
     if (JY931_data_ready)
     {
       JY931_data_ready=0;
@@ -717,26 +723,38 @@ void StartJY931Task(void const * argument)
       {
         switch(temp[1])
         {
-          case 0x51://acceleration
+          case 0x51://acceleration 
           {
-            jy_acc[0] = ((short)(temp [3]<<8| temp [2]))/32768.0*16;
-            jy_acc[1] = ((short)(temp [5]<<8| temp [4]))/32768.0*16;
-            jy_acc[2] = ((short)(temp [7]<<8| temp [6]))/32768.0*16;
+            jy_acc[0] = ((short)(temp [3]<<8| temp [2]))*16/32768;
+            jy_acc[1] = ((short)(temp [5]<<8| temp [4]))*16/32768;
+            jy_acc[2] = ((short)(temp [7]<<8| temp [6]))*16/32768;
             jy_temp   = ((short)(temp [9]<<8| temp [8]))/100;            
           }break;
-          case 0x52://angular velocity
+          /*case 0x52://angular velocity 
           {
-            jy_ang_vel[0] = ((short)(temp [3]<<8| temp [2]))/32768.0*2000;
-            jy_ang_vel[1] = ((short)(temp [5]<<8| temp [4]))/32768.0*2000;
-            jy_ang_vel[2] = ((short)(temp [7]<<8| temp [6]))/32768.0*2000;
+            jy_ang_vel[0] = ((short)(temp [3]<<8| temp [2]))*2000/32768;
+            jy_ang_vel[1] = ((short)(temp [5]<<8| temp [4]))*2000/32768;
+            jy_ang_vel[2] = ((short)(temp [7]<<8| temp [6]))*2000/32768;
             jy_temp       = ((short)(temp [9]<<8| temp [8]))/100;            
-          }break;
-          case 0x53://euler angle
+          }break;*/
+          case 0x53://euler angle 
           {
-            jy_angle[0] = ((short)(temp [3]<<8| temp [2]))/32768.0*180;
-            jy_angle[1] = ((short)(temp [5]<<8| temp [4]))/32768.0*180;
-            jy_angle[2] = ((short)(temp [7]<<8| temp [6]))/32768.0*180;
-            jy_temp     = ((short)(temp [9]<<8| temp [8]))/100;            
+            jy_angle[0] = ((short)(temp [3]<<8| temp [2]))*180/32768.0;
+            jy_angle[1] = ((short)(temp [5]<<8| temp [4]))*180/32768.0;
+            jy_angle[2] = ((short)(temp [7]<<8| temp [6]))*180/32768.0;
+            jy_temp     = ((short)(temp [9]<<8| temp [8]))/100;    
+            
+            xSemaphoreGive();
+            if ((jy_angle[1]>angle_old[1] + 1) || (jy_angle[1]<angle_old[1] - 1))//vertical
+            {
+              usb_buff[2] += jy_angle[1]-angle_old[1];
+            }
+            
+              
+            for (int i=0; i<3; i++)
+            {
+              angle_old[i] = jy_angle[i];
+            }
           }break;
           default:
           {
@@ -749,6 +767,10 @@ void StartJY931Task(void const * argument)
         jy931_errors[0]++;
       }
     }
+    
+    usb_demo_mouse(usb_buff);
+
+    osDelay(1);
   }
 }
 /* USER CODE END 4 */
@@ -774,6 +796,7 @@ void StartDefaultTask(void const * argument)
     osDelay(500);
     HAL_GPIO_WritePin(GPIOG, LD3_Pin, GPIO_PIN_RESET);
     osDelay(500);
+    //usb_demo_mouse(usb_buff);
   }
   /* USER CODE END 5 */ 
 }

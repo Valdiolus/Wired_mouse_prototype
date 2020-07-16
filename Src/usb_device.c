@@ -54,7 +54,12 @@ USBD_HandleTypeDef hUsbDeviceHS;
  * -- Insert your external function declaration here --
  */
 /* USER CODE BEGIN 1 */
-
+void usb_demo_mouse(uint8_t* buff)
+{
+  //buff[1]++;
+  //buff[2]++;
+  USBD_HID_SendReport(&hUsbDeviceHS, buff, 4);
+}
 /* USER CODE END 1 */
 
 /**

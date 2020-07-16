@@ -82,7 +82,7 @@ void MX_USB_DEVICE_Init(void);
  * -- Insert functions declaration here --
  */
 /* USER CODE BEGIN FD */
-
+void usb_demo_mouse(uint8_t* buff);
 /* USER CODE END FD */
 /**
   * @}
