@@ -20,7 +20,7 @@
         <stlinkResetStrategy>3</stlinkResetStrategy>
     </StLinkDriver>
     <DebugChecksum>
-        <Checksum>1209798904</Checksum>
+        <Checksum>1078332799</Checksum>
     </DebugChecksum>
     <Exceptions>
         <StopOnUncaught>_ 0</StopOnUncaught>
@@ -54,26 +54,21 @@
         <ITMportsLogFile>0</ITMportsLogFile>
         <ITMlogFile>$PROJ_DIR$\ITM.log</ITMlogFile>
     </SWOTraceHWSettings>
+    <struct_types>
+        <Fmt0>struct mouse_s-nop1	3	0</Fmt0>
+        <Fmt1>struct mouse_s-nop2	3	0</Fmt1>
+        <Fmt2>struct mouse_s-x	3	0</Fmt2>
+        <Fmt3>struct mouse_s-y	3	0</Fmt3>
+    </struct_types>
     <array_types>
-        <Fmt0>int[11]	4	0</Fmt0>
-        <Fmt1>uint8_t[10]	4	0</Fmt1>
+        <Fmt0>int8_t[3]	1	0</Fmt0>
+        <Fmt1>int[11]	4	0</Fmt1>
+        <Fmt2>uint8_t[10]	4	0</Fmt2>
+        <Fmt3>uint8_t[4]	3	0</Fmt3>
     </array_types>
     <watch_formats>
         <Fmt0>{W}42:i_uart	4	0</Fmt0>
     </watch_formats>
-    <DriverProfiling>
-        <Enabled>0</Enabled>
-        <Mode>3</Mode>
-        <Graph>0</Graph>
-        <Symbiont>0</Symbiont>
-        <Exclusions />
-    </DriverProfiling>
-    <CallStackLog>
-        <Enabled>0</Enabled>
-    </CallStackLog>
-    <CallStackStripe>
-        <ShowTiming>1</ShowTiming>
-    </CallStackStripe>
     <Trace2>
         <Enabled>0</Enabled>
         <ShowSource>0</ShowSource>
@@ -138,4 +133,17 @@
         <Count>0</Count>
         <SuppressDialog>0</SuppressDialog>
     </Aliases>
+    <DriverProfiling>
+        <Enabled>0</Enabled>
+        <Mode>3</Mode>
+        <Graph>0</Graph>
+        <Symbiont>0</Symbiont>
+        <Exclusions />
+    </DriverProfiling>
+    <CallStackLog>
+        <Enabled>0</Enabled>
+    </CallStackLog>
+    <CallStackStripe>
+        <ShowTiming>1</ShowTiming>
+    </CallStackStripe>
 </settings>

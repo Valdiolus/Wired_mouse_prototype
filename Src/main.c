@@ -25,7 +25,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "math.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -66,8 +66,14 @@ osThreadId JY931TaskHandle;
 uint8_t uart5_buffer[11];
 uint8_t JY931_data_ready=0;
 uint8_t jy931_errors[5];
-volatile float jy_acc[3], jy_ang_vel[3], jy_angle[3], jy_temp, angle_old[3];
+int16_t jy_temp;
 uint8_t temp[11];
+uint8_t usb_buffer[4] = {0,0,0,0};
+struct mouse_s mouse;
+struct jy_s jy_acceleration;
+struct jy_s jy_velocity;
+struct jy_s jy_angle;
+struct jy_s jy_angle_old;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -86,7 +92,7 @@ void StartDefaultTask(void const * argument);
 void StartJY931Task(void const * argument);
 
 /* USER CODE BEGIN PFP */
-osSemaphoreId uart_data_readyHandle;
+osSemaphoreId uart_data_ready;
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -141,8 +147,8 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
   /* add semaphores, ... */
-  osSemaphoreDef(uart_data_ready);
-  uart_data_readyHandle = xSemaphoreCreateBinary(osSemaphore(uart_data_ready), 1, queueQUEUE_TYPE_BINARY_SEMAPHORE);
+  osSemaphoreDef(UDR);
+  uart_data_ready = osSemaphoreCreate(osSemaphore(UDR), 1);
   /* USER CODE END RTOS_SEMAPHORES */
 
   /* USER CODE BEGIN RTOS_TIMERS */
@@ -160,7 +166,7 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_THREADS */
   osThreadDef(JY931Task, StartJY931Task, osPriorityRealtime, 0, 1024);
-  defaultTaskHandle = osThreadCreate(osThread(JY931Task), NULL);
+  JY931TaskHandle = osThreadCreate(osThread(JY931Task), (void *) uart_data_ready);
   /* USER CODE END RTOS_THREADS */
 
   /* Start scheduler */
@@ -171,6 +177,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    //int a = sKernelSysTick();
     /* USER CODE END WHILE */
     
     /* USER CODE BEGIN 3 */
@@ -500,7 +507,7 @@ static void MX_UART5_Init(void)
 
   /* USER CODE END UART5_Init 1 */
   huart5.Instance = UART5;
-  huart5.Init.BaudRate = 115200;
+  huart5.Init.BaudRate = 230400;
   huart5.Init.WordLength = UART_WORDLENGTH_8B;
   huart5.Init.StopBits = UART_STOPBITS_1;
   huart5.Init.Parity = UART_PARITY_NONE;
@@ -697,23 +704,80 @@ void UART_callback(void)
     i_uart++;
     if (i_uart > 10) 
     {
-      //JY931_data_ready=1;
-      xSemaphoreGiveFromISR(uart_data_ready);
+      JY931_data_ready=1;
+      //xSemaphoreGiveFromISR(uart_data_ready);
       i_uart=0;
+      //xSemaphoreGive(uart_data_ready);
+      //osSemaphoreRelease(uart_data_ready);
     }
   }
 }
 
+//pbuf[0] = 0;
+//pbuf[1] = x;
+//pbuf[2] = y;
+//pbuf[3] = 0;
+int16_t angle_H_TH = 89;
+int16_t angle_L_TH = -89;
+void Angle_math(void)//usb_buffer
+{
+  if (jy_angle.x < 0) jy_angle.x += 360;
+  if (jy_angle.y < 0) jy_angle.y += 360;
+  if (jy_angle.z < 0) jy_angle.z += 360;
+
+  if (jy_angle.x > 89) 
+  {
+    mouse.x = 0;
+  }
+  else
+  {
+    if (jy_angle.x < -89)
+    {
+      mouse.x = 0;//-89;
+    } 
+    else
+    {
+      if ((jy_angle.x != jy_angle_old.x) && (jy_angle.z != jy_angle_old.z))
+      {
+        mouse.x = jy_angle.x + (jy_angle.z - jy_angle_old.z)/2;
+      }
+    }
+  }
+  
+  if (jy_angle.y > 70) 
+  {
+    mouse.y = 0;
+  }
+  else
+  {
+    if (jy_angle.y < -70)
+    {
+      mouse.y = 0;
+    } 
+    else
+    {
+      if (jy_angle.y != jy_angle_old.y) mouse.y = jy_angle.y;
+    }
+  }
+   
+  for (int i=0; i<3; i++)
+  {
+    jy_angle_old = jy_angle;
+  }
+  
+  usb_demo_mouse(&mouse.nop1);
+}
+
 
 void StartJY931Task(void const * argument)
-{
-  uint8_t usb_buff[4] = {0,0,0,0};
+{ 
+  uint8_t angle_ready=0;
   while(1)
   {
     //osDelay(1);
     
-    val = osSemaphoreWait(wit_angle_readyHandle, 1000);
-    if (JY931_data_ready)
+    //val = osSemaphoreWait(wit_angle_readyHandle, 1000);
+    while (JY931_data_ready)//(osSemaphoreWait(uart_data_ready , 0) == osOK)
     {
       JY931_data_ready=0;
       
@@ -725,10 +789,10 @@ void StartJY931Task(void const * argument)
         {
           case 0x51://acceleration 
           {
-            jy_acc[0] = ((short)(temp [3]<<8| temp [2]))*16/32768;
-            jy_acc[1] = ((short)(temp [5]<<8| temp [4]))*16/32768;
-            jy_acc[2] = ((short)(temp [7]<<8| temp [6]))*16/32768;
-            jy_temp   = ((short)(temp [9]<<8| temp [8]))/100;            
+            jy_acceleration.x = ((int16_t)(temp [3]<<8| temp [2]))*16/32768;
+            jy_acceleration.y = ((int16_t)(temp [5]<<8| temp [4]))*16/32768;
+            jy_acceleration.z = ((int16_t)(temp [7]<<8| temp [6]))*16/32768;
+            jy_temp   = ((int16_t)(temp [9]<<8| temp [8]))/100;            
           }break;
           /*case 0x52://angular velocity 
           {
@@ -739,22 +803,11 @@ void StartJY931Task(void const * argument)
           }break;*/
           case 0x53://euler angle 
           {
-            jy_angle[0] = ((short)(temp [3]<<8| temp [2]))*180/32768.0;
-            jy_angle[1] = ((short)(temp [5]<<8| temp [4]))*180/32768.0;
-            jy_angle[2] = ((short)(temp [7]<<8| temp [6]))*180/32768.0;
-            jy_temp     = ((short)(temp [9]<<8| temp [8]))/100;    
-            
-            xSemaphoreGive();
-            if ((jy_angle[1]>angle_old[1] + 1) || (jy_angle[1]<angle_old[1] - 1))//vertical
-            {
-              usb_buff[2] += jy_angle[1]-angle_old[1];
-            }
-            
-              
-            for (int i=0; i<3; i++)
-            {
-              angle_old[i] = jy_angle[i];
-            }
+            jy_angle.x = ((int16_t)(temp [3]<<8| temp [2]))*180/32768;
+            jy_angle.y = ((int16_t)(temp [5]<<8| temp [4]))*180/32768;
+            jy_angle.z = ((int16_t)(temp [7]<<8| temp [6]))*180/32768;
+            jy_temp     = ((int16_t)(temp [9]<<8| temp [8]))/100;    
+            angle_ready=1;
           }break;
           default:
           {
@@ -768,7 +821,11 @@ void StartJY931Task(void const * argument)
       }
     }
     
-    usb_demo_mouse(usb_buff);
+    if (angle_ready) 
+    {
+      Angle_math();
+      angle_ready=0;
+    }
 
     osDelay(1);
   }

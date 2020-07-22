@@ -37,7 +37,18 @@ extern "C" {
 
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
+struct mouse_s{
+  uint8_t nop1;
+  int8_t x;
+  int8_t y;
+  uint8_t nop2;
+};
 
+struct jy_s{
+  int16_t x;
+  int16_t y;
+  int16_t z;
+};
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
